@@ -41,7 +41,9 @@ void Vehicle::_ready() {
   Object *debug_draw = Engine::get_singleton()->get_singleton("DebugDraw3D");
   const Variant cfg = debug_draw->call("scoped_config");
   auto *cfg_obj = cast_to<Object>(cfg);
-  cfg_obj->call("set_thickness", 0.005f);
+  cfg_obj->call("set_thickness", 0.005F);
+  cfg_obj->call("set_text_outline_size", 4);
+  cfg_obj->call("set_no_depth_test", true);
 
   UtilityFunctions::print("Vehicle ready");
 }
@@ -63,14 +65,20 @@ void Vehicle::_physics_process(double delta) {
 
     const Dictionary result = space->intersect_ray(query);
 
+    float travel = suspension_travel;
     if (result.is_empty()) {
       if (debug_draw) {
         debug_draw->call("draw_line", start, end, Color(1, 0, 0));
       }
     } else {
       const Vector3 hit_position = result["position"];
+      const float distance = hit_position.distance_to(start);
+      travel = distance / suspension_travel;
       if (debug_draw) {
         debug_draw->call("draw_line", start, hit_position, Color(0, 1, 0));
+        debug_draw->call("draw_text", start,
+                         String::num(travel).pad_decimals(2), 16,
+                         Color(1, 1, 1));
       }
     }
   }

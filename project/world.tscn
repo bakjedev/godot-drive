@@ -25,7 +25,7 @@ transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545
 shadow_enabled = true
 
 [node name="Vehicle" parent="." unique_id=1278739931 instance=ExtResource("1_f3sb7")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25714833, 2.5452394, -1.4450483)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25714833, 1.4213239, -1.4450483)
 
 [node name="Camera3D" type="Camera3D" parent="Vehicle" unique_id=1353579696]
 transform = Transform3D(-4.110545e-08, 0.34011698, -0.94038314, 1.4866985e-08, 0.94038314, 0.34011698, 1, 0, -4.371139e-08, -4.218711, 1.3121517, 0)
