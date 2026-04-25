@@ -8,9 +8,12 @@
 #include "godot_cpp/classes/world3d.hpp"
 
 void Vehicle::_bind_methods() {
-  ClassDB::bind_method(D_METHOD("get_speed"), &Vehicle::get_speed);
-  ClassDB::bind_method(D_METHOD("set_speed", "speed"), &Vehicle::set_speed);
-  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "speed"), "set_speed", "get_speed");
+  ClassDB::bind_method(D_METHOD("get_suspension_travel"),
+                       &Vehicle::get_suspension_travel);
+  ClassDB::bind_method(D_METHOD("set_suspension_travel", "travel"),
+                       &Vehicle::set_suspension_travel);
+  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_travel"),
+               "set_suspension_travel", "get_suspension_travel");
 }
 
 void Vehicle::_ready() {
@@ -47,15 +50,15 @@ void Vehicle::_physics_process(double delta) {
   const Transform3D transform = rigid_body->get_global_transform();
   Object *debug_draw = Engine::get_singleton()->get_singleton("DebugDraw3D");
 
-  for (const Vector3 &position : ray_positions) {
-    PhysicsDirectSpaceState3D *space = get_world_3d()->get_direct_space_state();
-    const auto down = Vector3(0, -1, 0);
+  const auto down = Vector3(0, -1, 0);
+  PhysicsDirectSpaceState3D *space = get_world_3d()->get_direct_space_state();
+  TypedArray<RID> exclude;
+  exclude.push_back(rigid_body);
 
+  for (const Vector3 &position : ray_positions) {
     const auto start = transform.xform(position);
-    const auto end = start + down * 1.0F;
+    const auto end = start + down * suspension_travel;
     const auto query = PhysicsRayQueryParameters3D::create(start, end);
-    TypedArray<RID> exclude;
-    exclude.push_back(rigid_body);
     query->set_exclude(exclude);
 
     const Dictionary result = space->intersect_ray(query);
@@ -73,4 +76,6 @@ void Vehicle::_physics_process(double delta) {
   }
 }
 
-void Vehicle::set_speed(const float param) { speed = param; }
+void Vehicle::set_suspension_travel(const float param) {
+  suspension_travel = param;
+}

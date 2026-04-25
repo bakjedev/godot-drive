@@ -18,7 +18,7 @@ private:
 
   Vector<Vector3> ray_positions;
 
-  float speed = 10.0F;
+  float suspension_travel = 0.2F;
 
 protected:
   static void _bind_methods();
@@ -27,6 +27,8 @@ public:
   void _ready() override;
   void _physics_process(double delta) override;
 
-  void set_speed(float param);
-  [[nodiscard]] float get_speed() const { return speed; }
+  void set_suspension_travel(float param);
+  [[nodiscard]] float get_suspension_travel() const {
+    return suspension_travel;
+  }
 };
