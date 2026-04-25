@@ -2,6 +2,35 @@
 
 [ext_resource type="PackedScene" uid="uid://cm2blodk0bosq" path="res://vehicle.tscn" id="1_f3sb7"]
 
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_f3sb7"]
+sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+
+[sub_resource type="Sky" id="Sky_fj7yv"]
+sky_material = SubResource("ProceduralSkyMaterial_f3sb7")
+
+[sub_resource type="Environment" id="Environment_tlwt5"]
+background_mode = 2
+sky = SubResource("Sky_fj7yv")
+tonemap_mode = 2
+glow_enabled = true
+
 [node name="Node3D" type="Node3D" unique_id=722680522]
 
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1811825513]
+environment = SubResource("Environment_tlwt5")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=205741151]
+transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
+shadow_enabled = true
+
 [node name="Vehicle" parent="." unique_id=1278739931 instance=ExtResource("1_f3sb7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25714833, 2.5452394, -1.4450483)
+
+[node name="Camera3D" type="Camera3D" parent="Vehicle" unique_id=1353579696]
+transform = Transform3D(-4.110545e-08, 0.34011698, -0.94038314, 1.4866985e-08, 0.94038314, 0.34011698, 1, 0, -4.371139e-08, -4.218711, 1.3121517, 0)
+
+[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=202396191]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.241394, -0.44433594, -1.3518372)
+use_collision = true
+size = Vector3(14.778442, 0.111328125, 10.021912)

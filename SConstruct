@@ -29,5 +29,8 @@ library = env.SharedLibrary(
 
 copy = env.Install("{}/bin/{}/".format(projectdir, env["platform"]), library)
 
-default_args = [library, copy]
+env.Tool("compilation_db")
+compiledb = env.CompilationDatabase()
+
+default_args = [library, copy, compiledb]
 Default(*default_args)
