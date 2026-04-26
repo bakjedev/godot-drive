@@ -7,13 +7,20 @@
 #include "godot_cpp/classes/rigid_body3d.hpp"
 #include "godot_cpp/classes/world3d.hpp"
 
-void Vehicle::setup_debug_draw() {
+bool Vehicle::setup_debug_draw() {
   Object *debug_draw = Engine::get_singleton()->get_singleton("DebugDraw3D");
+  if (debug_draw == nullptr) {
+    return false;
+  }
   const Variant cfg = debug_draw->call("scoped_config");
   auto *cfg_obj = cast_to<Object>(cfg);
+  if (cfg_obj == nullptr) {
+    return false;
+  }
   cfg_obj->call("set_thickness", 0.005F);
   cfg_obj->call("set_text_outline_size", 4);
   cfg_obj->call("set_no_depth_test", true);
+  return true;
 }
 
 void Vehicle::debug_draw() const {
@@ -24,36 +31,62 @@ void Vehicle::debug_draw() const {
   }
 
   const Transform3D transform = rigid_body->get_global_transform();
-  const auto up = Vector3(0, 1, 0);
+  const auto down = -transform.basis.get_column(1);
   for (const Wheel &wheel : wheels) {
     const auto start = transform.xform(wheel.position);
-    const auto end = start - up * (wheel.previous_travel * suspension_travel);
+    const auto end = start + down * (suspension_rest + wheel_radius);
 
-    Color color = wheel.previous_travel * suspension_travel < suspension_travel
-                      ? Color(0, 1, 0)
-                      : Color(1, 0, 0);
+    const Color color = wheel.in_air ? Color(1, 0, 0) : Color(0, 1, 0);
 
     dd3d->call("draw_line", start, end, color);
     dd3d->call("draw_text", start,
-               String::num(wheel.previous_travel).pad_decimals(2), 16,
+               String::num(wheel.compression).pad_decimals(2), 16,
                Color(1, 1, 1));
   }
 }
 
-void Vehicle::_bind_methods() {
-  ClassDB::bind_method(D_METHOD("get_suspension_travel"),
-                       &Vehicle::get_suspension_travel);
-  ClassDB::bind_method(D_METHOD("set_suspension_travel", "travel"),
-                       &Vehicle::set_suspension_travel);
-  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_travel"),
-               "set_suspension_travel", "get_suspension_travel");
+bool Vehicle::setup_center_of_gravity() {
+  auto *cg_node = rigid_body->get_node<Node3D>("CG");
+  if (cg_node == nullptr) {
+    return false;
+  }
+  center_of_gravity = cg_node->get_position();
+  rigid_body->set_center_of_mass(center_of_gravity);
+  return true;
+}
 
+void Vehicle::_bind_methods() {
+  // wheel radius
+  ClassDB::bind_method(D_METHOD("get_wheel_radius"),
+                       &Vehicle::get_wheel_radius);
+  ClassDB::bind_method(D_METHOD("set_wheel_radius", "radius"),
+                       &Vehicle::set_wheel_radius);
+  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "wheel_radius"), "set_wheel_radius",
+               "get_wheel_radius");
+
+  // suspension rest
   ClassDB::bind_method(D_METHOD("get_suspension_rest"),
                        &Vehicle::get_suspension_rest);
   ClassDB::bind_method(D_METHOD("set_suspension_rest", "rest"),
                        &Vehicle::set_suspension_rest);
   ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_rest"),
                "set_suspension_rest", "get_suspension_rest");
+
+  // suspension stiffness
+  ClassDB::bind_method(D_METHOD("get_suspension_stiffness"),
+                       &Vehicle::get_suspension_stiffness);
+  ClassDB::bind_method(D_METHOD("set_suspension_stiffness", "stiffness"),
+                       &Vehicle::set_suspension_stiffness);
+  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_stiffness"),
+               "set_suspension_stiffness", "get_suspension_stiffness");
+
+  // suspension damping
+  ClassDB::bind_method(D_METHOD("get_suspension_damping"),
+                       &Vehicle::get_suspension_damping);
+  ClassDB::bind_method(D_METHOD("set_suspension_damping", "damping"),
+                       &Vehicle::set_suspension_damping);
+  ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_damping"),
+               "set_suspension_damping", "get_suspension_damping");
 }
 
 void Vehicle::_ready() {
@@ -80,7 +113,15 @@ void Vehicle::_ready() {
   wheels.write[3].position =
       aabb.position + Vector3(aabb.size.x, 0, aabb.size.z);
 
-  setup_debug_draw();
+  if (!setup_center_of_gravity()) {
+    UtilityFunctions::printerr("Vehicle couldn't setup center of gravity!");
+    return;
+  }
+
+  if (!setup_debug_draw()) {
+    UtilityFunctions::printerr("Vehicle couldn't setup debug drawing!");
+    return;
+  }
 
   UtilityFunctions::print("Vehicle ready");
 }
@@ -92,35 +133,55 @@ void Vehicle::_physics_process(const double delta) {
   PhysicsDirectSpaceState3D *space = get_world_3d()->get_direct_space_state();
   TypedArray<RID> exclude;
   exclude.push_back(rigid_body);
-  const auto down = Vector3(0, -1, 0);
-  const float resting_position = suspension_travel * suspension_rest;
+  const auto up = transform.basis.get_column(1);
 
   for (Wheel &wheel : wheels) {
-
     const auto start = transform.xform(wheel.position);
-    const auto end = start + down * suspension_travel;
+    const auto end = start - up * (suspension_rest + wheel_radius);
     const auto query = PhysicsRayQueryParameters3D::create(start, end);
     query->set_exclude(exclude);
 
     const Dictionary result = space->intersect_ray(query);
 
-    float travel = 1.0F;
     if (!result.is_empty()) {
+      wheel.in_air = false;
       const Vector3 hit_position = result["position"];
       const float distance = hit_position.distance_to(start);
-      travel = distance / suspension_travel;
-      rigid_body->apply_force(-down * 500.0F * (1.0F - travel) *
-                                  static_cast<real_t>(delta),
-                              wheel.position);
-    }
 
-    wheel.previous_travel = travel;
+      const float previous_compression = wheel.compression;
+      wheel.compression = suspension_rest - (distance - wheel_radius);
+
+      const float compression_rate =
+          (wheel.compression - previous_compression) /
+          static_cast<float>(delta);
+
+      auto damped_harmonic_oscillator = [](const float k, const float x,
+                                           const float c, const float v) {
+        return -(k * x) - (c * v);
+      };
+
+      const float suspension = Math::max(
+          0.0F,
+          damped_harmonic_oscillator(suspension_stiffness, -wheel.compression,
+                                     suspension_damping, -compression_rate));
+
+      rigid_body->apply_force(up * suspension, wheel.position);
+    } else {
+      wheel.in_air = true;
+    }
   }
 }
 
-void Vehicle::set_suspension_travel(const float param) {
-  suspension_travel = param;
-}
+void Vehicle::set_wheel_radius(const float param) { wheel_radius = param; }
+
 void Vehicle::set_suspension_rest(const float param) {
   suspension_rest = param;
+}
+
+void Vehicle::set_suspension_stiffness(const float param) {
+  suspension_stiffness = param;
+}
+
+void Vehicle::set_suspension_damping(const float param) {
+  suspension_damping = param;
 }

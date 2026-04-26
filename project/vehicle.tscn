@@ -8,6 +8,9 @@ size = Vector3(2, 0.5, 1)
 [node name="Vehicle" type="Vehicle" unique_id=1278739931]
 
 [node name="RigidBody" type="RigidBody3D" parent="." unique_id=1046554399]
+mass = 1500.0
+center_of_mass_mode = 1
+center_of_mass = Vector3(0, -0.17585796, 0)
 
 [node name="CollisionShape" type="CollisionShape3D" parent="RigidBody" unique_id=1009671602]
 shape = SubResource("BoxShape3D_owshx")
@@ -17,3 +20,4 @@ transform = Transform3D(2, 0, 0, 0, 0.5, 0, 0, 0, 1, 0, 0, 0)
 mesh = SubResource("BoxMesh_owshx")
 
 [node name="CG" type="Node3D" parent="RigidBody" unique_id=478694763]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16744387, 0)
