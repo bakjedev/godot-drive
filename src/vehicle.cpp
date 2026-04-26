@@ -136,7 +136,9 @@ void Vehicle::_physics_process(const double delta) {
   const auto up = transform.basis.get_column(1);
 
   for (Wheel &wheel : wheels) {
-    const auto start = transform.xform(wheel.position);
+    const Vector3 wheel_world = transform.xform(wheel.position);
+
+    const auto start = wheel_world;
     const auto end = start - up * (suspension_rest + wheel_radius);
     const auto query = PhysicsRayQueryParameters3D::create(start, end);
     query->set_exclude(exclude);
@@ -148,12 +150,16 @@ void Vehicle::_physics_process(const double delta) {
       const Vector3 hit_position = result["position"];
       const float distance = hit_position.distance_to(start);
 
-      const float previous_compression = wheel.compression;
       wheel.compression = suspension_rest - (distance - wheel_radius);
 
-      const float compression_rate =
-          (wheel.compression - previous_compression) /
-          static_cast<float>(delta);
+      const Vector3 body_velocity = rigid_body->get_linear_velocity();
+      const Vector3 wheel_offset =
+          wheel_world - rigid_body->get_global_position();
+      const Vector3 point_velocity =
+          body_velocity +
+          rigid_body->get_angular_velocity().cross(wheel_offset);
+
+      const float compression_rate = -up.dot(point_velocity);
 
       auto damped_harmonic_oscillator = [](const float k, const float x,
                                            const float c, const float v) {
@@ -165,9 +171,10 @@ void Vehicle::_physics_process(const double delta) {
           damped_harmonic_oscillator(suspension_stiffness, -wheel.compression,
                                      suspension_damping, -compression_rate));
 
-      rigid_body->apply_force(up * suspension, wheel.position);
+      rigid_body->apply_force(up * suspension, wheel_offset);
     } else {
       wheel.in_air = true;
+      wheel.compression = 0.0F;
     }
   }
 }
