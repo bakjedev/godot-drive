@@ -159,7 +159,7 @@ void Vehicle::_physics_process(const double delta) {
           body_velocity +
           rigid_body->get_angular_velocity().cross(wheel_offset);
 
-      const float compression_rate = -up.dot(point_velocity);
+      const float compression_rate = up.dot(point_velocity);
 
       auto damped_harmonic_oscillator = [](const float k, const float x,
                                            const float c, const float v) {
@@ -169,7 +169,7 @@ void Vehicle::_physics_process(const double delta) {
       const float suspension = Math::max(
           0.0F,
           damped_harmonic_oscillator(suspension_stiffness, -wheel.compression,
-                                     suspension_damping, -compression_rate));
+                                     suspension_damping, compression_rate));
 
       rigid_body->apply_force(up * suspension, wheel_offset);
     } else {
