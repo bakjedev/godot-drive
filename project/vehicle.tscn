@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cm2blodk0bosq"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_owshx"]
-size = Vector3(2.137085, 0.36328125, 1)
+size = Vector3(2, 0.5, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_owshx"]
 
@@ -9,10 +9,11 @@ size = Vector3(2.137085, 0.36328125, 1)
 
 [node name="RigidBody" type="RigidBody3D" parent="." unique_id=1046554399]
 
-[node name="Collision" type="CollisionShape3D" parent="RigidBody" unique_id=1009671602]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.001159668, 0.001953125, 0)
+[node name="CollisionShape" type="CollisionShape3D" parent="RigidBody" unique_id=1009671602]
 shape = SubResource("BoxShape3D_owshx")
 
 [node name="Mesh" type="MeshInstance3D" parent="RigidBody" unique_id=805680809]
 transform = Transform3D(2, 0, 0, 0, 0.5, 0, 0, 0, 1, 0, 0, 0)
 mesh = SubResource("BoxMesh_owshx")
+
+[node name="CG" type="Node3D" parent="RigidBody" unique_id=478694763]
