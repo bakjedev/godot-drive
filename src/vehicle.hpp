@@ -1,4 +1,5 @@
 #pragma once
+#include <godot_cpp/classes/curve.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
@@ -28,8 +29,10 @@ private:
   float suspension_rest = 0.1F;
   float suspension_stiffness = 1.0F;
   float suspension_damping = 0.0F;
+  Ref<Curve> load_sensitivity_curve;
 
   Vector<Wheel> wheels;
+  bool ready = false;
 
   static constexpr float ray_epsilon = 0.001F;
 
@@ -60,5 +63,10 @@ public:
   void set_suspension_damping(float param);
   [[nodiscard]] float get_suspension_damping() const {
     return suspension_damping;
+  }
+
+  void set_load_sensitivity_curve(const Ref<Curve> &curve);
+  [[nodiscard]] Ref<Curve> get_load_sensitivity_curve() const {
+    return load_sensitivity_curve;
   }
 };

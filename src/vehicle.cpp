@@ -87,6 +87,16 @@ void Vehicle::_bind_methods() {
                        &Vehicle::set_suspension_damping);
   ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "suspension_damping"),
                "set_suspension_damping", "get_suspension_damping");
+
+  // load sensitivity curve
+  ClassDB::bind_method(D_METHOD("get_load_sensitivity_curve"),
+                       &Vehicle::get_load_sensitivity_curve);
+  ClassDB::bind_method(
+      D_METHOD("set_load_sensitivity_curve", "load_sensitivity"),
+      &Vehicle::set_load_sensitivity_curve);
+  ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "load_sensitivity_curve",
+                            PROPERTY_HINT_RESOURCE_TYPE, "Curve"),
+               "set_load_sensitivity_curve", "get_load_sensitivity_curve");
 }
 
 void Vehicle::_ready() {
@@ -123,11 +133,26 @@ void Vehicle::_ready() {
     return;
   }
 
+  if (load_sensitivity_curve.is_null()) {
+    UtilityFunctions::printerr("Vehicle doesn't have load sensitivity curve!");
+    return;
+  }
+
   UtilityFunctions::print("Vehicle ready");
+  ready = true;
 }
-void Vehicle::_process(double delta) { debug_draw(); }
+void Vehicle::_process(double delta) {
+  if (!ready) {
+    return;
+  }
+  debug_draw();
+}
 
 void Vehicle::_physics_process(const double delta) {
+  if (!ready) {
+    return;
+  }
+
   const Transform3D transform = rigid_body->get_global_transform();
   const Vector3 body_velocity = rigid_body->get_linear_velocity();
   PhysicsDirectSpaceState3D *space = get_world_3d()->get_direct_space_state();
@@ -137,9 +162,28 @@ void Vehicle::_physics_process(const double delta) {
   const auto forward = -transform.basis.get_column(2);
   const auto right = transform.basis.get_column(0);
 
+  const float gravity = rigid_body->get_gravity().length();
+  const float mass = rigid_body->get_mass();
+  const float nominal_load = mass * gravity / 4.0F;
+
   auto damped_harmonic_oscillator = [](const float k, const float x,
                                        const float c, const float v) {
     return -(k * x) - (c * v);
+  };
+
+  auto brush = [](const float slip_angle, const float c_stiff,
+                  const float friction, const float load) {
+    const float peak = (3.0F * friction * load) / c_stiff;
+    const float slip_abs = Math::abs(slip_angle);
+
+    if (slip_abs >= peak) {
+      return -Math::sign(slip_angle) * friction * load;
+    }
+    const float sliding = slip_abs / peak;
+    const float grip = friction * load *
+                       (3.0F * sliding - 3.0F * sliding * sliding +
+                        sliding * sliding * sliding);
+    return -Math::sign(slip_angle) * grip;
   };
 
   for (Wheel &wheel : wheels) {
@@ -183,8 +227,11 @@ void Vehicle::_physics_process(const double delta) {
       const float slip_angle =
           Math::atan2(lateral, Math::abs(longitudinal) + 0.1f);
 
+      const float friction =
+          load_sensitivity_curve->sample(suspension / nominal_load);
+
       const float lateral_force =
-          Math::clamp(-5000.0F * slip_angle, -suspension, suspension);
+          brush(slip_angle, 5000.0F, friction, suspension);
       const float longitudinal_force = -50.0F * longitudinal;
 
       rigid_body->apply_force(
@@ -208,4 +255,8 @@ void Vehicle::set_suspension_stiffness(const float param) {
 
 void Vehicle::set_suspension_damping(const float param) {
   suspension_damping = param;
+}
+
+void Vehicle::set_load_sensitivity_curve(const Ref<Curve> &curve) {
+  load_sensitivity_curve = curve;
 }

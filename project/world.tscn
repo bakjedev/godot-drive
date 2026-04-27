@@ -1,7 +1,8 @@
 [gd_scene format=3 uid="uid://dvfi6x4tiavuy"]
 
-[ext_resource type="PackedScene" uid="uid://cm2blodk0bosq" path="res://vehicle.tscn" id="1_f3sb7"]
+[ext_resource type="PackedScene" uid="uid://cm2blodk0bosq" path="res://vehicle.tscn" id="1_fj7yv"]
 [ext_resource type="Script" uid="uid://5okxa01bp7ry" path="res://camera_3d.gd" id="2_fj7yv"]
+[ext_resource type="Curve" uid="uid://ygwq1i34ktut" path="res://load_sensitivity_curve.tres" id="2_tlwt5"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_f3sb7"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -27,11 +28,11 @@ environment = SubResource("Environment_tlwt5")
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
 shadow_enabled = true
 
-[node name="Vehicle" parent="." unique_id=1278739931 instance=ExtResource("1_f3sb7")]
+[node name="Vehicle" parent="." unique_id=1278739931 instance=ExtResource("1_fj7yv")]
 wheel_radius = 0.35
 suspension_stiffness = 25000.0
 suspension_damping = 4000.0
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0.246, 0.14173174, -5.456)
+load_sensitivity_curve = ExtResource("2_tlwt5")
 
 [node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=202396191]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.241394, -0.44383594, -0.6914315)
