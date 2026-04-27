@@ -128,12 +128,19 @@ void Vehicle::_ready() {
 void Vehicle::_process(double delta) { debug_draw(); }
 
 void Vehicle::_physics_process(const double delta) {
-
   const Transform3D transform = rigid_body->get_global_transform();
+  const Vector3 body_velocity = rigid_body->get_linear_velocity();
   PhysicsDirectSpaceState3D *space = get_world_3d()->get_direct_space_state();
   TypedArray<RID> exclude;
   exclude.push_back(rigid_body);
   const auto up = transform.basis.get_column(1);
+  const auto forward = -transform.basis.get_column(2);
+  const auto right = transform.basis.get_column(0);
+
+  auto damped_harmonic_oscillator = [](const float k, const float x,
+                                       const float c, const float v) {
+    return -(k * x) - (c * v);
+  };
 
   for (Wheel &wheel : wheels) {
     const Vector3 wheel_world = transform.xform(wheel.position);
@@ -152,7 +159,6 @@ void Vehicle::_physics_process(const double delta) {
 
       wheel.compression = suspension_rest - (distance - wheel_radius);
 
-      const Vector3 body_velocity = rigid_body->get_linear_velocity();
       const Vector3 wheel_offset =
           wheel_world - rigid_body->get_global_position();
       const Vector3 point_velocity =
@@ -161,17 +167,28 @@ void Vehicle::_physics_process(const double delta) {
 
       const float compression_rate = up.dot(point_velocity);
 
-      auto damped_harmonic_oscillator = [](const float k, const float x,
-                                           const float c, const float v) {
-        return -(k * x) - (c * v);
-      };
-
       const float suspension = Math::max(
           0.0F,
           damped_harmonic_oscillator(suspension_stiffness, -wheel.compression,
                                      suspension_damping, compression_rate));
 
       rigid_body->apply_force(up * suspension, wheel_offset);
+
+      const float longitudinal = forward.dot(point_velocity);
+      const float lateral = right.dot(point_velocity);
+
+      const Vector3 contact_offset =
+          hit_position - rigid_body->get_global_position();
+
+      const float slip_angle =
+          Math::atan2(lateral, Math::abs(longitudinal) + 0.1f);
+
+      const float lateral_force =
+          Math::clamp(-5000.0F * slip_angle, -suspension, suspension);
+      const float longitudinal_force = -50.0F * longitudinal;
+
+      rigid_body->apply_force(
+          forward * longitudinal_force + right * lateral_force, contact_offset);
     } else {
       wheel.in_air = true;
       wheel.compression = 0.0F;
