@@ -1,49 +1,12 @@
 #include "vehicle.hpp"
 
+#include "debug_ui.hpp"
 #include "godot_cpp/classes/engine.hpp"
 #include "godot_cpp/classes/mesh_instance3d.hpp"
 #include "godot_cpp/classes/physics_direct_space_state3d.hpp"
 #include "godot_cpp/classes/physics_ray_query_parameters3d.hpp"
 #include "godot_cpp/classes/rigid_body3d.hpp"
 #include "godot_cpp/classes/world3d.hpp"
-
-bool Vehicle::setup_debug_draw() {
-  Object *debug_draw = Engine::get_singleton()->get_singleton("DebugDraw3D");
-  if (debug_draw == nullptr) {
-    return false;
-  }
-  const Variant cfg = debug_draw->call("scoped_config");
-  auto *cfg_obj = cast_to<Object>(cfg);
-  if (cfg_obj == nullptr) {
-    return false;
-  }
-  cfg_obj->call("set_thickness", 0.005F);
-  cfg_obj->call("set_text_outline_size", 4);
-  cfg_obj->call("set_no_depth_test", true);
-  return true;
-}
-
-void Vehicle::debug_draw() const {
-  Object *dd3d = Engine::get_singleton()->get_singleton("DebugDraw3D");
-
-  if (dd3d == nullptr) {
-    return;
-  }
-
-  const Transform3D transform = rigid_body->get_global_transform();
-  const auto down = -transform.basis.get_column(1);
-  for (const Wheel &wheel : wheels) {
-    const auto start = transform.xform(wheel.position);
-    const auto end = start + down * (suspension_rest + wheel_radius);
-
-    const Color color = wheel.in_air ? Color(1, 0, 0) : Color(0, 1, 0);
-
-    dd3d->call("draw_line", start, end, color);
-    dd3d->call("draw_text", start,
-               String::num(wheel.compression).pad_decimals(2), 16,
-               Color(1, 1, 1));
-  }
-}
 
 bool Vehicle::setup_center_of_gravity() {
   auto *cg_node = rigid_body->get_node<Node3D>("CG");
@@ -128,11 +91,6 @@ void Vehicle::_ready() {
     return;
   }
 
-  if (!setup_debug_draw()) {
-    UtilityFunctions::printerr("Vehicle couldn't setup debug drawing!");
-    return;
-  }
-
   if (load_sensitivity_curve.is_null()) {
     UtilityFunctions::printerr("Vehicle doesn't have load sensitivity curve!");
     return;
@@ -141,11 +99,17 @@ void Vehicle::_ready() {
   UtilityFunctions::print("Vehicle ready");
   ready = true;
 }
+
 void Vehicle::_process(double delta) {
   if (!ready) {
     return;
   }
-  debug_draw();
+  for (auto i = 0; i < wheels.size(); i++) {
+    const auto &wheel = wheels.get(i);
+    debug_ui::set("wheel " + String::num(i + 1, 0) +
+                      ":\nangular_velocity: %+5.2f\ncompression: %+5.2f\n",
+                  wheel.angular_velocity, wheel.compression);
+  }
 }
 
 void Vehicle::_physics_process(const double delta) {
@@ -164,26 +128,18 @@ void Vehicle::_physics_process(const double delta) {
 
   const float gravity = rigid_body->get_gravity().length();
   const float mass = rigid_body->get_mass();
-  const float nominal_load = mass * gravity / 4.0F;
+  const float nominal_wheel_load = mass * gravity / 4.0F;
 
   auto damped_harmonic_oscillator = [](const float k, const float x,
                                        const float c, const float v) {
     return -(k * x) - (c * v);
   };
 
-  auto brush = [](const float slip_angle, const float c_stiff,
-                  const float friction, const float load) {
-    const float peak = (3.0F * friction * load) / c_stiff;
-    const float slip_abs = Math::abs(slip_angle);
-
-    if (slip_abs >= peak) {
-      return -Math::sign(slip_angle) * friction * load;
-    }
-    const float sliding = slip_abs / peak;
-    const float grip = friction * load *
-                       (3.0F * sliding - 3.0F * sliding * sliding +
-                        sliding * sliding * sliding);
-    return -Math::sign(slip_angle) * grip;
+  // r = how far along are we to total saturation
+  auto brush_curve = [](const float r) {
+    if (r >= 1.0F)
+      return 1.0F;
+    return (3.0F * r) - (3.0F * r * r) + (r * r * r);
   };
 
   for (Wheel &wheel : wheels) {
@@ -202,7 +158,6 @@ void Vehicle::_physics_process(const double delta) {
       const float distance = hit_position.distance_to(start);
 
       wheel.compression = suspension_rest - (distance - wheel_radius);
-
       const Vector3 wheel_offset =
           wheel_world - rigid_body->get_global_position();
       const Vector3 point_velocity =
@@ -211,31 +166,55 @@ void Vehicle::_physics_process(const double delta) {
 
       const float compression_rate = up.dot(point_velocity);
 
-      const float suspension = Math::max(
-          0.0F,
-          damped_harmonic_oscillator(suspension_stiffness, -wheel.compression,
-                                     suspension_damping, compression_rate));
+      const float suspension =
+          Math::max(0.0F, damped_harmonic_oscillator(
+                              suspension_stiffness, -wheel.compression,
+                              suspension_damping, compression_rate)); // Fz
 
       rigid_body->apply_force(up * suspension, wheel_offset);
 
       const float longitudinal = forward.dot(point_velocity);
       const float lateral = right.dot(point_velocity);
 
-      const Vector3 contact_offset =
-          hit_position - rigid_body->get_global_position();
-
       const float slip_angle =
           Math::atan2(lateral, Math::abs(longitudinal) + 0.1f);
 
-      const float friction =
-          load_sensitivity_curve->sample(suspension / nominal_load);
+      const float slip_ratio =
+          ((wheel.angular_velocity * wheel_radius) - longitudinal) /
+          Math::max(Math::abs(longitudinal), 1.0F);
 
-      const float lateral_force =
-          brush(slip_angle, 5000.0F, friction, suspension);
-      const float longitudinal_force = -50.0F * longitudinal;
+      const float load_ratio = suspension / nominal_wheel_load;
+      const float mu =
+          load_sensitivity_curve->sample(load_ratio); // friction coefficient
+      const float max_force = mu * suspension;
+
+      float lateral_force = 0.0F;
+      float longitudinal_force = 0.0F;
+      if (max_force > 0.0F) {
+        // how much slipping on each axis
+        const float sx =
+            (longitudinal_stiffness * slip_ratio) / (3.0F * max_force);
+        const float sy =
+            (cornering_stiffness * Math::tan(slip_angle)) / (3.0F * max_force);
+        const float sigma = Math::sqrt(sx * sx + sy * sy); // combined slip
+
+        const float force_magnitude = max_force * brush_curve(sigma);
+
+        if (!Math::is_zero_approx(sigma)) {
+          longitudinal_force = force_magnitude * (sx / sigma);
+          lateral_force = -force_magnitude * (sy / sigma);
+        }
+      }
+
+      const Vector3 contact_offset =
+          hit_position - rigid_body->get_global_position();
 
       rigid_body->apply_force(
           forward * longitudinal_force + right * lateral_force, contact_offset);
+
+      const float inertia = 0.5F * wheel_mass * wheel_radius * wheel_radius;
+      const float torque = -longitudinal_force * wheel_radius;
+      wheel.angular_velocity += (torque / inertia) * static_cast<float>(delta);
     } else {
       wheel.in_air = true;
       wheel.compression = 0.0F;

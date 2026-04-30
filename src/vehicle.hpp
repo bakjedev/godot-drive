@@ -14,6 +14,7 @@ struct Wheel {
   Vector3 position;
   float compression = 0.0F;
   bool in_air = true;
+  float angular_velocity = 0.0F;
 };
 
 class Vehicle : public Node3D {
@@ -24,20 +25,21 @@ private:
   RigidBody3D *rigid_body;
   Vector3 center_of_gravity;
 
-  float wheel_radius = 0.5F;
+  float wheel_radius = 0.35F;
+  float wheel_mass = 20.0F;
 
   float suspension_rest = 0.1F;
-  float suspension_stiffness = 1.0F;
-  float suspension_damping = 0.0F;
+  float suspension_stiffness = 25000.0F;
+  float suspension_damping = 4000.0F;
+
   Ref<Curve> load_sensitivity_curve;
+  float cornering_stiffness = 5000.0F;
+  float longitudinal_stiffness = 3000.0F;
 
   Vector<Wheel> wheels;
+
   bool ready = false;
-
   static constexpr float ray_epsilon = 0.001F;
-
-  static bool setup_debug_draw();
-  void debug_draw() const;
 
   bool setup_center_of_gravity();
 
