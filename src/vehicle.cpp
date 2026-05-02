@@ -106,9 +106,10 @@ void Vehicle::_process(double delta) {
   }
   for (auto i = 0; i < wheels.size(); i++) {
     const auto &wheel = wheels.get(i);
-    debug_ui::set("wheel " + String::num(i + 1, 0) +
-                      ":\nangular_velocity: %+5.2f\ncompression: %+5.2f\n",
-                  wheel.angular_velocity, wheel.compression);
+    debug_ui::set(
+        "wheel " + String::num(i + 1, 0) +
+            ":\nangular_velocity: %+5.2f\ncompression: %+5.2f\nslip: %+5.2f\n",
+        wheel.angular_velocity, wheel.compression, wheel.slip);
   }
 }
 
@@ -153,11 +154,14 @@ void Vehicle::_physics_process(const double delta) {
     const Dictionary result = space->intersect_ray(query);
 
     if (!result.is_empty()) {
-      wheel.in_air = false;
+      wheel.in_air = false; // debug info
       const Vector3 hit_position = result["position"];
       const float distance = hit_position.distance_to(start);
 
-      wheel.compression = suspension_rest - (distance - wheel_radius);
+      const float compression = suspension_rest - (distance - wheel_radius);
+
+      wheel.compression = compression; // debug info
+
       const Vector3 wheel_offset =
           wheel_world - rigid_body->get_global_position();
       const Vector3 point_velocity =
@@ -168,7 +172,7 @@ void Vehicle::_physics_process(const double delta) {
 
       const float suspension =
           Math::max(0.0F, damped_harmonic_oscillator(
-                              suspension_stiffness, -wheel.compression,
+                              suspension_stiffness, -compression,
                               suspension_damping, compression_rate)); // Fz
 
       rigid_body->apply_force(up * suspension, wheel_offset);
@@ -192,17 +196,20 @@ void Vehicle::_physics_process(const double delta) {
       float longitudinal_force = 0.0F;
       if (max_force > 0.0F) {
         // how much slipping on each axis
-        const float sx =
+        const float slip_x =
             (longitudinal_stiffness * slip_ratio) / (3.0F * max_force);
-        const float sy =
+        const float slip_y =
             (cornering_stiffness * Math::tan(slip_angle)) / (3.0F * max_force);
-        const float sigma = Math::sqrt(sx * sx + sy * sy); // combined slip
+        const float slip = Math::sqrt(
+            slip_x * slip_x + slip_y * slip_y); // combined normalized slip
 
-        const float force_magnitude = max_force * brush_curve(sigma);
+        wheel.slip = slip; // debug info
 
-        if (!Math::is_zero_approx(sigma)) {
-          longitudinal_force = force_magnitude * (sx / sigma);
-          lateral_force = -force_magnitude * (sy / sigma);
+        if (!Math::is_zero_approx(slip)) {
+          const float force_magnitude = max_force * brush_curve(slip);
+
+          longitudinal_force = force_magnitude * (slip_x / slip);
+          lateral_force = -force_magnitude * (slip_y / slip);
         }
       }
 
@@ -216,6 +223,7 @@ void Vehicle::_physics_process(const double delta) {
       const float torque = -longitudinal_force * wheel_radius;
       wheel.angular_velocity += (torque / inertia) * static_cast<float>(delta);
     } else {
+      // debug info
       wheel.in_air = true;
       wheel.compression = 0.0F;
     }

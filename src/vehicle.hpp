@@ -12,9 +12,12 @@ using namespace godot;
 
 struct Wheel {
   Vector3 position;
-  float compression = 0.0F;
-  bool in_air = true;
   float angular_velocity = 0.0F;
+
+  // debug info
+  bool in_air = true;
+  float compression = 0.0F;
+  float slip = 0.0F;
 };
 
 class Vehicle : public Node3D {
