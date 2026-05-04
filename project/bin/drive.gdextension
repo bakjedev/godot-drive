@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "drive_init"
+compatibility_minimum = "4.6"
+
+[libraries]
+linux.x86_64.single.debug = "./linux/libDrive.linux.template_debug.x86_64.so"
+linux.x86_64.double.debug = "./linux/libDrive.linux.template_debug.x86_64.double.so"
+linux.x86_64.single.release = "./linux/libDrive.linux.template_release.x86_64.so"
+linux.x86_64.double.release = "./linux/libDrive.linux.template_release.x86_64.double.so"

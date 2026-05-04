@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dvfi6x4tiavuy"]
 
 [ext_resource type="PackedScene" uid="uid://cm2blodk0bosq" path="res://vehicle.tscn" id="1_fj7yv"]
-[ext_resource type="Script" uid="uid://5okxa01bp7ry" path="res://camera_3d.gd" id="2_fj7yv"]
+[ext_resource type="Script" uid="uid://cg81hvcsryajg" path="res://camera_3d.gd" id="2_fj7yv"]
 [ext_resource type="Curve" uid="uid://ygwq1i34ktut" path="res://load_sensitivity_curve.tres" id="2_tlwt5"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_f3sb7"]
